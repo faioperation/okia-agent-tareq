@@ -1,0 +1,32 @@
+services:
+  # AI Agent Service (FastAPI)
+  ai:
+    build: .
+    container_name: edukai_ai_agent
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      # Fix for "ModuleNotFoundError: No module named 'app'"
+      - PYTHONPATH=/app
+      # Fix for Hot-Reload not working on Windows
+      - WATCHFILES_FORCE_POLLING=true
+    depends_on:
+      - redis
+    restart: always
+
+  # Redis Service
+  redis:
+    # Using redis-stack-server to support the modules seen in your logs (ReJSON, Search, etc.)
+    image: redis/redis-stack-server:latest
+    container_name: edukai_redis
+    ports:
+      - "6379:6379"
+    restart: always
+
+networks:
+  default:
+    name: edukai_network
