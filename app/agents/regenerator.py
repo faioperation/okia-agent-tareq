@@ -1,8 +1,5 @@
-# app/agents/regenerator.py
-
 import json
 import httpx
-from datetime import datetime
 from openai import AsyncOpenAI
 from app.core.config import settings
 from app.core.prompts import SYSTEM_PROMPTS
@@ -12,7 +9,6 @@ class RegeneratorAgent:
         self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
     async def fetch_and_regenerate(self, record_id: str):
-        # dynamic URL from settings
         base_url = settings.GET_CV_DATA_FOR_REGENERATION_API
         if not base_url.endswith('/'): base_url += '/'
         fetch_url = f"{base_url}{record_id}"
@@ -28,28 +24,34 @@ class RegeneratorAgent:
             try:
                 response = await client.get(fetch_url)
                 if response.status_code != 200:
-                    return {"error": f"Backend returned {response.status_code}"}
+                    return {"error": f"Backend fetch failed: {response.status_code}"}
 
                 full_res = response.json()
                 payload = full_res.get('data', {})
                 if isinstance(payload, list) and len(payload) > 0: payload = payload[0]
 
-                actual_record_id = payload.get('id')  
-                actual_candidate_id = payload.get('candidateId') 
-                
                 candidate_info = payload.get('candidate', {})
                 raw_text = candidate_info.get('rawExtractedText', '')
-                c_name = candidate_info.get('candidateName', 'Candidate')
+                real_email = candidate_info.get('emailAddress', 'N/A')
+                real_phone = candidate_info.get('contactNumber', 'N/A')
+                real_name = candidate_info.get('candidateName', 'Candidate')
+                real_job = candidate_info.get('jobTitle', 'Professional')
+                actual_candidate_id = payload.get('candidateId')
 
-                if not raw_text:
-                    return {"error": "rawExtractedText not found"}
+                prompt_content = (
+                    f"Candidate ID: {actual_candidate_id}\n"
+                    f"Full Name: {real_name}\n"
+                    f"Job Title: {real_job}\n"
+                    f"Real Contact: {real_email} / {real_phone}\n\n"
+                    f"CV TEXT CONTENT:\n{raw_text}"
+                )
 
                 # AI Processing
                 ai_response = await self.client.chat.completions.create(
                     model=settings.SMART_MODEL,
                     messages=[
                         {"role": "system", "content": SYSTEM_PROMPTS["regenerator"]},
-                        {"role": "user", "content": f"Candidate ID: {actual_candidate_id}\nName: {c_name}\nCV Text: {raw_text}"}
+                        {"role": "user", "content": prompt_content}
                     ],
                     response_format={"type": "json_object"}
                 )
@@ -57,10 +59,10 @@ class RegeneratorAgent:
                 ai_json = json.loads(ai_response.choices[0].message.content)
                 
                 return {
-                    "qualified_cv": actual_record_id,
+                    "qualified_cv": record_id,
                     "candidate_id": actual_candidate_id,
                     "structured_json": ai_json
                 }
 
             except Exception as e:
-                return {"error": f"Logic Error: {str(e)}"}
+                return {"error": f"Agent Logic Error: {str(e)}"}
