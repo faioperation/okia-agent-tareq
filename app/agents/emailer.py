@@ -10,7 +10,8 @@ class EmailerAgent:
 
     async def fetch_and_generate_email(self, cv_id: str):
         base_url = settings.GET_GENERATED_CV_API
-        fetch_url = f"{base_url}{cv_id}" if base_url.endswith('/') else f"{base_url}/{cv_id}"
+        if not base_url.endswith('/'): base_url += '/'
+        fetch_url = f"{base_url}{cv_id}"
 
         headers = {
             "Accept": "application/json",
@@ -20,46 +21,45 @@ class EmailerAgent:
 
         async with httpx.AsyncClient(timeout=30.0, headers=headers) as client:
             try:
-                # 1. Fetching logic
+                # 1. Fetch CV data from Backend
                 response = await client.get(fetch_url)
-                res_data = response.json().get('data', {})
-                if isinstance(res_data, list) and len(res_data) > 0: res_data = res_data[0]
+                full_res = response.json()
+                cv_json = full_res.get('data', {})
+                if isinstance(cv_json, list) and len(cv_json) > 0: cv_json = cv_json[0]
 
-                # Extracting Name for Dynamic Greeting
-                # If first_name is MD or empty, try to get something better
-                first_name = res_data.get("header", {}).get("first_name", "Hiring Manager")
-                if first_name.lower() in ["md", "mr", "ms"]:
-                    # Fallback to a professional greeting if only title is found
-                    salutation_name = "Hiring Manager"
-                else:
-                    salutation_name = first_name
+                # Extract Candidate Name for Greeting
+                first_name = cv_json.get("header", {}).get("first_name", "Hiring Manager")
 
                 # 2. AI Generation
-                print(f"DEBUG: Generating AI Content for {salutation_name}...")
                 ai_res = await self.client.chat.completions.create(
                     model=settings.FAST_MODEL,
                     messages=[
                         {"role": "system", "content": SYSTEM_PROMPTS["emailer"]},
-                        {"role": "user", "content": f"Candidate Data: {json.dumps(res_data)}"}
+                        {"role": "user", "content": f"CV DATA: {json.dumps(cv_json)}"}
                     ],
                     response_format={"type": "json_object"}
                 )
-                
-                ai_output = json.loads(ai_res.choices[0].message.content)
+                ai_data = json.loads(ai_res.choices[0].message.content)
 
-                # 3. Final Structure Assembly (Strictly matching your desired format)
+                # 3. Assemble the FINAL Nested JSON structure as per your request
                 return {
                     "metadata": {
                         "candidate_id": cv_id,
-                        "target_client": salutation_name,
+                        "target_client": first_name,
                         "brand": "EDUKAI RECRUITMENT"
                     },
                     "email_content": {
-                        "subject": ai_output.get("subject"),
-                        "salutation": f"Dear {salutation_name},",
-                        "intro_paragraph": ai_output.get("intro"),
-                        "key_highlights": ai_output.get("highlights", []),
-                        "impact_statement": ai_output.get("impact"),
+                        "subject_options": ai_data.get("subject_options", []),
+                        "subject": ai_data.get("subject"),
+                        "salutation": f"Dear {first_name},",
+                        "intro_paragraph": ai_data.get("intro"),
+                        "key_highlights": [
+                            {"icon": "✅", "title": "Extensive Expertise", "description": ai_data.get("expertise_desc")},
+                            {"icon": "🎓", "title": "Project Delivery", "description": ai_data.get("project_desc")},
+                            {"icon": "💡", "title": "Technical Proficiency", "description": ai_data.get("technical_desc")},
+                            {"icon": "🤝", "title": "Soft Skills and Collaboration", "description": ai_data.get("soft_skills_desc")}
+                        ],
+                        "impact_statement": ai_data.get("impact"),
                         "closing_statement": "Best regards,\nEdukai Recruitment Team",
                         "nb_footer": "NB. If you have another vacancy for another role, simply drop me an email with your requirement(s) and I will send you our best matched candidates. (this is a generic email so journey times to your school for your chosen candidate(s) would have to be explored before an interview/trial is arranged)"
                     },
@@ -76,5 +76,4 @@ class EmailerAgent:
                 }
 
             except Exception as e:
-                print(f"ERROR: {str(e)}")
-                return {"error": str(e)}
+                return {"error": f"Emailer Agent Error: {str(e)}"}
