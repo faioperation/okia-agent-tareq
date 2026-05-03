@@ -10,12 +10,19 @@ class Settings(BaseSettings):
     SMART_MODEL: str
     REDIS_URL: str
     API_V1_STR: str = "/api/v1"
-    GET_CV_DATA_FOR_QUALIFICATION_API: str
-    BACKEND_AUTH_HEADER_NAME: str
+    
+    # Backend Auth Config
+    BACKEND_AUTH_HEADER_NAME: str = "backend-header"
     BACKEND_AUTH_TOKEN: str
+
+    # API Endpoints for Fetching (GET)
+    GET_CV_DATA_FOR_QUALIFICATION_API: str
     GET_CV_DATA_FOR_REGENERATION_API: str = ""
     GET_GENERATED_CV_API: str = ""
 
+    # API Endpoints for Pushing Results (POST)
+    POST_QUALIFICATION_RESULTS_API: str = ""
+    POST_EMAIL_PITCH_API: str = ""
 
     model_config = ConfigDict(
         env_file=".env",
