@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     GET_GENERATED_CV_API: str = ""
 
     # API Endpoints for Pushing Results (POST)
-    POST_QUALIFICATION_RESULTS_API: str = ""
+    POST_QUALIFICATION_RESULTS_API: str
     POST_EMAIL_PITCH_API: str = ""
 
     model_config = ConfigDict(
